@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using JasperFx.Events.Projections;
@@ -299,6 +300,36 @@ public class AdvancedOperations
 
     /// <summary>
     ///     "Upsert" tenant ids and matching partition suffixes to all conjoined, multi-tenanted
+    ///     tables *if* Marten-managed partitioning is applied to this store. The Guid tenant ids
+    ///     are converted to strings via ToString() and used as both tenant id and partition suffix
+    /// </summary>
+    /// <param name="token"></param>
+    /// <param name="tenantIds"></param>
+    public Task<TablePartitionStatus[]> AddMartenManagedTenantsAsync(CancellationToken token, params Guid[] tenantIds)
+    {
+        return AddMartenManagedTenantsAsync(token, tenantIds.Select(id => id.ToString()).ToArray());
+    }
+
+    /// <summary>
+    ///     "Upsert" tenant ids and matching partition suffixes to all conjoined, multi-tenanted
+    ///     tables *if* Marten-managed partitioning is applied to this store. The Guid tenant ids
+    ///     are converted to strings via ToString() as tenant ids, and the supplied function is used
+    ///     to determine the partition suffix for each tenant
+    /// </summary>
+    /// <param name="token"></param>
+    /// <param name="tenantIds"></param>
+    /// <param name="partitionSuffixFromTenantId">Function to derive the partition suffix from a Guid tenant id</param>
+    public Task<TablePartitionStatus[]> AddMartenManagedTenantsAsync(CancellationToken token, Guid[] tenantIds,
+        Func<Guid, string> partitionSuffixFromTenantId)
+    {
+        var dict = new Dictionary<string, string>();
+        foreach (var tenantId in tenantIds) dict[tenantId.ToString()] = partitionSuffixFromTenantId(tenantId);
+
+        return AddMartenManagedTenantsAsync(token, dict);
+    }
+
+    /// <summary>
+    ///     "Upsert" tenant ids and matching partition suffixes to all conjoined, multi-tenanted
     ///     tables *if* Marten-managed partitioning is applied to this store. This assumes a 1-1
     ///     relationship between tenant ids and table partitions
     /// </summary>
@@ -319,6 +350,8 @@ public class AdvancedOperations
                 "This option is not (yet) supported in combination with database per tenant multi-tenancy");
         }
 
+        AssertValidPostgresqlIdentifiers(tenantIdToPartitionMapping.Values);
+
         var database = (PostgresqlDatabase)_store.Tenancy.Default.Database;
 
 
@@ -328,6 +361,18 @@ public class AdvancedOperations
             database,
             tenantIdToPartitionMapping,
             token).ConfigureAwait(false);
+    }
+
+    internal static readonly Regex ValidPostgresqlIdentifierRegex = new(@"^[a-zA-Z_][a-zA-Z0-9_]*$", RegexOptions.Compiled);
+
+    internal static void AssertValidPostgresqlIdentifiers(IEnumerable<string> suffixes)
+    {
+        var invalidSuffixes = suffixes.Where(s => !ValidPostgresqlIdentifierRegex.IsMatch(s)).ToArray();
+        if (invalidSuffixes.Length > 0)
+        {
+            throw new ArgumentException(
+                $"The following partition suffix values contain illegal characters for PostgreSQL object identifiers: {string.Join(", ", invalidSuffixes.Select(s => $"'{s}'"))}. Suffixes must start with a letter or underscore and contain only letters, digits, and underscores.");
+        }
     }
 
     /// <summary>

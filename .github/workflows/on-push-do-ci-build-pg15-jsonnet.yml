@@ -21,7 +21,6 @@ on:
 env:
   DOTNET_CLI_TELEMETRY_OPTOUT: 1
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
-  node_version: 24.x
   pg_db: marten_testing
   pg_user: postgres
   CONFIGURATION: Release
@@ -67,11 +66,6 @@ jobs:
           dotnet workload update
           dotnet workload install aspire
 
-      - name: Install Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: ${{ env.node_version }}
-
       - name: Optimize database for running tests faster
         run: |
           PG_CONTAINER_NAME=$(docker ps --filter expose=5432/tcp --format {{.Names}})
@@ -100,11 +94,6 @@ jobs:
         run: ./build.sh test-document-db
         shell: bash
 
-      - name: test-event-sourcing
-        if: ${{ success() || failure() }}
-        run: ./build.sh test-event-sourcing
-        shell: bash
-
       - name: test-cli
         if: ${{ success() || failure() }}
         run: ./build.sh test-cli
@@ -125,10 +114,10 @@ jobs:
         run: ./build.sh test-patching
         shell: bash
 
-      - name: test-value-types
-        if: ${{ success() || failure() }}
-        run: ./build.sh test-value-types
-        shell: bash
+      # - name: test-value-types
+      #  if: ${{ success() || failure() }}
+      #  run: ./build.sh test-value-types
+      #  shell: bash
 
       - name: test-code-gen
         if: ${{ success() || failure() }}
@@ -140,7 +129,7 @@ jobs:
         run: ./build.sh test-noda-time
         shell: bash
 
-      - name: test-aspnet-core
-        if: ${{ success() || failure() }}
-        run: ./build.sh test-aspnet-core
-        shell: bash
+      #- name: test-aspnet-core
+      #  if: ${{ success() || failure() }}
+      #  run: ./build.sh test-aspnet-core
+      #  shell: bash

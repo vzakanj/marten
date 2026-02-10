@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -61,6 +62,11 @@ public partial class DocumentStore: IDocumentStore, IDescribeMyself
         StorageFeatures.PostProcessConfiguration();
         Events.Initialize(this);
         Options.Projections.AssertValidity(Options);
+
+        if (Options.LogFactory != null)
+        {
+            Options.Projections.AttachLogging(Options.LogFactory);
+        }
 
         Advanced = new AdvancedOperations(this);
 
@@ -518,6 +524,9 @@ public partial class DocumentStore: IDocumentStore, IDescribeMyself
             DocumentTracking.DirtyTracking => new DirtyCheckingDocumentSession(this, options, connection),
             _ => throw new ArgumentOutOfRangeException(nameof(SessionOptions.Tracking))
         };
+
+        session.CorrelationId = Activity.Current?.RootId;
+        session.CausationId = Activity.Current?.ParentId;
 
         return session;
     }
